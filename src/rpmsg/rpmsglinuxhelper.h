@@ -5,7 +5,6 @@
 #ifndef RPMSG_LINUX_HELPER_HPP
 #define RPMSG_LINUX_HELPER_HPP
 
-#include <string>
 #include <linux/rpmsg.h>
 
 #define RPMSG_BUS_SYS "/sys/bus/rpmsg"

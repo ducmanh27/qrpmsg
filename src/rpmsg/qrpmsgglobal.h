@@ -7,6 +7,17 @@
 
 #include <QtCore/qstring.h>
 #include <QtCore/qglobal.h>
-#include <QtRPMsg/qtrpmsgexports.h>
+QT_BEGIN_NAMESPACE
 
-#endif // QSERIALPORTGLOBAL_H
+#ifndef QT_STATIC
+#  if defined(QT_BUILD_QTRPMSG_LIB)
+#    define Q_RPMSG_EXPORT Q_DECL_EXPORT
+#  else
+#    define Q_RPMSG_EXPORT Q_DECL_IMPORT
+#  endif
+#else
+#  define Q_RPMSG_EXPORT
+#endif
+
+QT_END_NAMESPACE
+#endif // QRPMSGGLOBAL_H

@@ -4,7 +4,6 @@
 #ifndef QRPMSG_H
 #define QRPMSG_H
 #include <QtCore/qiodevice.h>
-#include <QtCore/qproperty.h>
 
 #include <QtRPMsg/qrpmsgglobal.h>
 
@@ -76,6 +75,7 @@ protected:
     qint64 writeData(const char *data, qint64 len) override;
 
 private:
+    QRPMsgPrivate * const d_dummy;
     Q_DISABLE_COPY(QRPMsg)
 
 

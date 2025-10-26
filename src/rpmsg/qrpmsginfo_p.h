@@ -33,5 +33,12 @@ public:
     bool hasVendorIdentifier = false;
     bool hasProductIdentifier = false;
 };
+class QRPMsgInfoPrivateDeleter
+{
+public:
+    static void cleanup(QRPMsgInfoPrivate *p) {
+        delete p;
+    }
+};
 QT_END_NAMESPACE
 #endif // QRPMSGINFO_P_H

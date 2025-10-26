@@ -7,6 +7,8 @@
 QT_BEGIN_NAMESPACE
 class QRPMsg;
 class QRPMsgInfoPrivate;
+class QRPMsgInfoPrivateDeleter;
+
 class Q_RPMSG_EXPORT QRPMsgInfo
 {
     Q_DECLARE_PRIVATE(QRPMsgInfo)
@@ -16,13 +18,18 @@ public:
     explicit QRPMsgInfo(const QString &name);
     QRPMsgInfo(const QRPMsgInfo &other);
     ~QRPMsgInfo();
+    bool isNull() const;
 private:
     QRPMsgInfo(const QRPMsgInfoPrivate &dd);
     // friend QList<QRPMsgInfo> availablePortsByUdev(bool &ok);
     // friend QList<QRPMsgInfo> availablePortsBySysfs(bool &ok);
     // friend QList<QRPMsgInfo> availablePortsByFiltersOfDevices(bool &ok);
-    std::unique_ptr<QRPMsgInfoPrivate> d_ptr;
+    QScopedPointer<QRPMsgInfoPrivate, QRPMsgInfoPrivateDeleter> d_ptr;
 };
+
+
+inline bool QRPMsgInfo::isNull() const
+{ return !d_ptr; }
 
 QT_END_NAMESPACE
 

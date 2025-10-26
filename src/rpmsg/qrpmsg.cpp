@@ -46,19 +46,22 @@ QRPMsgErrorInfo::QRPMsgErrorInfo(QRPMsg::RPMsgError newErrorCode, const QString 
 }
 
 QRPMsg::QRPMsg(QObject *parent)
-    : QIODevice(*new QRPMsgPrivate, parent)
+    : QIODevice(*new QRPMsgPrivate, parent),
+    d_dummy(0)
 {
 
 }
 
 QRPMsg::QRPMsg(const QString &name, QObject *parent)
-    : QIODevice(*new QRPMsgPrivate, parent)
+    : QIODevice(*new QRPMsgPrivate, parent),
+    d_dummy(0)
 {
     setChannelName(name);
 }
 
 QRPMsg::QRPMsg(const QRPMsgInfo &info, QObject *parent)
-    : QIODevice(*new QRPMsgPrivate, parent)
+    : QIODevice(*new QRPMsgPrivate, parent),
+    d_dummy(0)
 {
     Q_UNUSED(info)
     // TODO: set channel info

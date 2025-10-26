@@ -308,7 +308,7 @@ QRPMsgPrivate::QRPMsgPrivate()
 
 }
 
-bool QRPMsgPrivate::open(QIODeviceBase::OpenMode mode)
+bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
 {
     // TODO: lock file
     // QString lockFilePath = rpMsgLockFilePath(QRPMsgInfoPrivate::channelNameFromSystemLocation(systemLocation));
@@ -534,9 +534,8 @@ void QRPMsgPrivate::setError(const QRPMsgErrorInfo &errorInfo)
 {
     Q_Q(QRPMsg);
 
+    error = errorInfo.errorCode;
     q->setErrorString(errorInfo.errorString);
-    error.setValue(errorInfo.errorCode);
-    error.notify();
     emit q->errorOccurred(error);
 }
 
@@ -553,7 +552,7 @@ qint64 QRPMsgPrivate::writeData(const char *data, qint64 maxSize)
     return toAppend;
 }
 
-bool QRPMsgPrivate::initialize(QIODeviceBase::OpenMode mode)
+bool QRPMsgPrivate::initialize(QIODevice::OpenMode mode)
 {
     // Ngăn tiến trình khác mở cùng một datafd cùng lúc
 #ifdef TIOCEXCL

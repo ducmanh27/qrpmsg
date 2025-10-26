@@ -19,15 +19,14 @@
 #include <qdeadlinetimer.h>
 
 #include <private/qiodevice_p.h>
-#include <private/qproperty_p.h>
 
 #include <memory>
 
-#  include <QtCore/qlockfile.h>
-#  include <QtCore/qfileinfo.h>
-#  include <QtCore/qstringlist.h>
-#  include <limits.h>
-#  include <termios.h>
+#include <QtCore/qlockfile.h>
+#include <QtCore/qfileinfo.h>
+#include <QtCore/qstringlist.h>
+#include <limits.h>
+#include <termios.h>
 #include <linux/rpmsg.h>
 
 #ifndef QRPMSG_BUFFERSIZE
@@ -75,13 +74,10 @@ public:
     bool isWriteNotificationEnabled() const;
     void setWriteNotificationEnabled(bool enable);
 
-    void setBindableError(QRPMsg::RPMsgError error)
-    { setError(error); }
-    Q_OBJECT_COMPAT_PROPERTY_WITH_ARGS(QRPMsgPrivate, QRPMsg::RPMsgError, error,
-                                       &QRPMsgPrivate::setBindableError, QRPMsg::NoError)
 
     QString systemLocation;
     qint64 readBufferMaxSize = 0;
+    QRPMsg::RPMsgError error = QRPMsg::NoError;
     qint64 writeBufferMaxSize = 0;
 
     qint64 readFromEndpoint(char *data, qint64 maxSize);
