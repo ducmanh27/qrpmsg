@@ -27,7 +27,7 @@
 #include <string>
 #include "rpmsglinuxhelper.h"
 
-
+#include <QDebug>
 QString rpMsgLockFilePath(const QString &channelName)
 {
     static const QStringList lockDirectoryPaths = QStringList()
@@ -210,7 +210,7 @@ bool QRPMsgPrivate::readNotification()
 
     char *ptr = buffer.reserve(bytesToRead);
     const qint64 readBytes = readFromEndpoint(ptr, bytesToRead);
-
+    qDebug() << "Read from endpoint " << readBytes << " bytes";
     buffer.chop(bytesToRead - qMax(readBytes, qint64(0)));
 
     if (readBytes < 0) {
@@ -326,68 +326,76 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
     //     return false;
     // }
     char rpmsg_dev[256];
-    char rpmsg_ctrl_dev[256];
+    char rpmsg_ctrl_dev_name[NAME_MAX] = "virtio0.rpmsg_ctrl.0.0";
     char rpmsg_char_name[64];
     char ept_dev_name[64];
     char ept_dev_path[256];
     int ret;
+    char fpath[2*NAME_MAX];
     if (name == "")
     {
         return false;
     }
-    printf("[manhpd9] Channel name %s \n", name.c_str());
-    strncpy(ept.name, name.c_str(), sizeof(ept.name) - 1);
-    ept.name[sizeof(ept.name) - 1] = '\0';
 
-    ept.src = 0;
-    ept.dst = 0;
+    strncpy(eptinfo.name, name.c_str(), sizeof(eptinfo.name) - 1);
+
+    eptinfo.name[sizeof(eptinfo.name) - 1] = '\0';
+
+    eptinfo.src = 0;
+    eptinfo.dst = 0;
+    qDebug() << "ept.name:" << eptinfo.name;
+    qDebug() << "ept.src:" << eptinfo.src;
+    qDebug() << "ept.dst:" << eptinfo.dst;
 
     // Lookup channel
     snprintf(rpmsg_dev, sizeof(rpmsg_dev), "virtio0.%s.-1.0", name.c_str());
-    ret = RPMsgLinuxHelper::lookup_channel(rpmsg_dev, &ept);
+    ret = RPMsgLinuxHelper::lookup_channel(rpmsg_dev, &eptinfo);
     if (ret < 0) {
-        printf("Failed to lookup channel %s\n", name.c_str());
+        qDebug("Failed to lookup rpmsg_dev %s\n",rpmsg_dev);
+        return false;
+    }
+
+    sprintf(fpath, RPMSG_BUS_SYS "/devices/%s", rpmsg_dev);
+    if (access(fpath, F_OK)) {
+        fprintf(stderr, "access(%s): %s\n", fpath, strerror(errno));
         return false;
     }
 
     // Bind chrdev
     ret = RPMsgLinuxHelper::bind_rpmsg_chrdev(rpmsg_dev);
     if (ret < 0) {
-        printf("Failed to bind chrdev for %s\n", name.c_str());
+        qDebug("Failed to bind chrdev for %s\n", name.c_str());
         return false;
     }
 
     // Get control device fd
-    snprintf(rpmsg_ctrl_dev, sizeof(rpmsg_ctrl_dev), "virtio0.rpmsg_ctrl.0.0");
-    charfd = RPMsgLinuxHelper::get_rpmsg_chrdev_fd(rpmsg_ctrl_dev,
+    /* kernel >= 6.0 has new path for rpmsg_ctrl device */
+    charfd = RPMsgLinuxHelper::get_rpmsg_chrdev_fd(rpmsg_ctrl_dev_name,
                                                    rpmsg_char_name);
     if (charfd < 0) {
         charfd = RPMsgLinuxHelper::get_rpmsg_chrdev_fd(rpmsg_dev,
                                                        rpmsg_char_name);
+        /* may be kernel is < 6.0 try previous path */
         if (charfd < 0) {
-            printf("Failed to get chrdev fd for %s\n", name.c_str());
+            qDebug("Failed to get chrdev fd for %s\n", name.c_str());
             return false;
         }
     }
 
-    // Create endpoint
+    // Create endpoint from rpmsg char driver
     // TODO: [manhpd9] Create multiple endpoint in a channel
-    ret = RPMsgLinuxHelper::app_rpmsg_create_ept(charfd, &ept);
-    if (ret < 0) {
-        printf("Failed to create endpoint for %s\n", name.c_str());
-        // TODO: remove syscal
-        // ::close(charfd);
+    ret = RPMsgLinuxHelper::app_rpmsg_create_ept(charfd, &eptinfo);
+    if (ret) {
+        qDebug("Failed to create endpoint for %s\n", name.c_str());
         qt_safe_close(charfd);
         return false;
     }
 
     // Get endpoint device name
     if (!RPMsgLinuxHelper::get_rpmsg_ept_dev_name(rpmsg_char_name,
-                                                  ept.name,
+                                                  eptinfo.name,
                                                   ept_dev_name)) {
-        printf("Failed to get ept dev name for %s\n", name.c_str());
-        // TODO: remove syscal
-        // ::close(charfd);
+        qDebug("Failed to get ept dev name for %s\n", name.c_str());
         qt_safe_close(charfd);
         return false;
     }
@@ -395,7 +403,7 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
     // Open endpoint device
     snprintf(ept_dev_path, sizeof(ept_dev_path), "/dev/%s", ept_dev_name);
 
-
+    // TODO: need verify open mode
     int flags = O_NOCTTY | O_NONBLOCK;
     switch (mode & QIODevice::ReadWrite) {
     case QIODevice::WriteOnly:
@@ -409,29 +417,20 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
         break;
     }
 
-    // datafd = ::open(ept_dev_path, flags);
     descriptor = qt_safe_open(ept_dev_path, flags); // datafd
     if (descriptor < 0) {
-        printf("Failed to open %s\n", ept_dev_path);
+        qDebug("Failed to open %s\n", ept_dev_path);
         setError(getSystemError());
-        // TODO: remove syscal
-        // ::close(charfd);
         qt_safe_close(charfd);
         return false;
     }
 
-    printf("[OK] Channel '%s' initialized (datafd=%d)\n",
-           name.c_str(), datafd);
-
-    // descriptor = qt_safe_open(systemLocation.toLocal8Bit().constData(), flags);
-
-    // if (descriptor == -1) {
-    //     setError(getSystemError());
-    //     return false;
-    // }
+    qDebug("[OK] Channel '%s' initialized (descriptor=%d)\n",
+           name.c_str(), descriptor);
 
     if (!initialize(mode)) {
         qt_safe_close(descriptor);
+        qt_safe_close(charfd);
         return false;
     }
 
@@ -443,10 +442,6 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
 
 void QRPMsgPrivate::close()
 {
-#ifdef TIOCNXCL
-    ::ioctl(descriptor, TIOCNXCL);
-#endif
-
     delete readNotifier;
     readNotifier = nullptr;
 
@@ -554,11 +549,7 @@ qint64 QRPMsgPrivate::writeData(const char *data, qint64 maxSize)
 
 bool QRPMsgPrivate::initialize(QIODevice::OpenMode mode)
 {
-    // Ngăn tiến trình khác mở cùng một datafd cùng lúc
-#ifdef TIOCEXCL
-    if (::ioctl(descriptor, TIOCEXCL) == -1)
-        setError(getSystemError());
-#endif
+
     if (mode & QIODevice::ReadOnly)
         setReadNotificationEnabled(true);
 

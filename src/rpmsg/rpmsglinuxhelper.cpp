@@ -15,6 +15,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <QDebug>
 
 int RPMsgLinuxHelper::app_rpmsg_create_ept(int rpfd, struct rpmsg_endpoint_info *eptinfo) {
     int ret;
@@ -36,17 +37,17 @@ char * RPMsgLinuxHelper::get_rpmsg_ept_dev_name(const char *rpmsg_char_name, con
     for (i = 0; i < 128; i++) {
         sprintf(sys_rpmsg_ept_name_path, "%s/%s/rpmsg%d/name",
             sys_rpmsg_path, rpmsg_char_name, i);
-        printf("checking %s\n", sys_rpmsg_ept_name_path);
+        qDebug("checking %s\n", sys_rpmsg_ept_name_path);
         if (access(sys_rpmsg_ept_name_path, F_OK) < 0)
             continue;
         fp = fopen(sys_rpmsg_ept_name_path, "r");
         if (!fp) {
-            printf("failed to open %s\n", sys_rpmsg_ept_name_path);
+            qDebug("failed to open %s\n", sys_rpmsg_ept_name_path);
             break;
         }
         fgets(svc_name, sizeof(svc_name), fp);
         fclose(fp);
-        printf("svc_name: %s.\n",svc_name);
+        qDebug("svc_name: %s.\n",svc_name);
         ept_name_len = strlen(ept_name);
         if (ept_name_len > sizeof(svc_name))
             ept_name_len = sizeof(svc_name);
@@ -56,7 +57,7 @@ char * RPMsgLinuxHelper::get_rpmsg_ept_dev_name(const char *rpmsg_char_name, con
         }
     }
 
-    printf("Not able to RPMsg endpoint file for %s:%s.\n",
+    qDebug("Not able to RPMsg endpoint file for %s:%s.\n",
            rpmsg_char_name, ept_name);
     return NULL;
 }
@@ -71,7 +72,7 @@ int RPMsgLinuxHelper::bind_rpmsg_chrdev(const char *rpmsg_dev_name) {
     /* rpmsg dev overrides path */
     sprintf(fpath, "%s/devices/%s/driver_override",
         RPMSG_BUS_SYS, rpmsg_dev_name);
-    printf("open %s\n", fpath);
+    qDebug("open %s\n", fpath);
     fd = open(fpath, O_RDWR);
     if (fd < 0) {
         fprintf(stderr, "Failed to open %s, %s\n",
@@ -87,7 +88,7 @@ int RPMsgLinuxHelper::bind_rpmsg_chrdev(const char *rpmsg_dev_name) {
         return ret;
     }
 
-    printf("current drv override = %s\n", drv_override);
+    qDebug("current drv override = %s\n", drv_override);
 
     /*
      * Check driver override. If "rpmsg_chrdev" string is
@@ -122,7 +123,7 @@ int RPMsgLinuxHelper::bind_rpmsg_chrdev(const char *rpmsg_dev_name) {
             fpath, strerror(errno));
         return -EINVAL;
     }
-    printf("write %s to %s\n", rpmsg_dev_name, fpath);
+    qDebug("write %s to %s\n", rpmsg_dev_name, fpath);
     ret = write(fd, rpmsg_dev_name, strlen(rpmsg_dev_name) + 1);
     if (ret < 0) {
         fprintf(stderr, "Failed to write %s to %s, %s\n",
@@ -141,7 +142,7 @@ int RPMsgLinuxHelper::get_rpmsg_chrdev_fd(const char *rpmsg_dev_name, char *rpms
     int fd;
 
     sprintf(dpath, "%s/devices/%s/rpmsg", RPMSG_BUS_SYS, rpmsg_dev_name);
-    printf("opendir %s\n", dpath);
+    qDebug("opendir %s\n", dpath);
     dir = opendir(dpath);
     if (dir == NULL) {
         fprintf(stderr, "opendir %s, %s\n", dpath, strerror(errno));
@@ -151,7 +152,7 @@ int RPMsgLinuxHelper::get_rpmsg_chrdev_fd(const char *rpmsg_dev_name, char *rpms
         if (!strncmp(ent->d_name, "rpmsg_ctrl", 10)) {
             sprintf(dpath, "/dev/%s", ent->d_name);
             closedir(dir);
-            printf("open %s\n", dpath);
+            qDebug("open %s\n", dpath);
             fd = open(dpath, O_RDWR | O_NONBLOCK);
             if (fd < 0) {
                 fprintf(stderr, "open %s, %s\n",
@@ -179,11 +180,11 @@ int RPMsgLinuxHelper::lookup_channel(char *out, struct rpmsg_endpoint_info *pep)
     }
     // Scan tất cả devices trong /sys/bus/rpmsg/devices/
     while ((ent = readdir(dir)) != NULL) {
-        // Tìm device có tên chứa "rpmsg-openamp-demo-channel"
+        // Tìm device có tên chứa channelName, trong exapmle này đang là "rpmsg-openamp-demo-channel"
         if (strstr(ent->d_name, pep->name)) {
             strncpy(out, ent->d_name, NAME_MAX);
             set_src_dst(out, pep); // Parse destination address
-            printf("using dev file: %s\n", out);
+            qDebug("using dev file: %s\n", out);
             closedir(dir);
             return 0;
         }

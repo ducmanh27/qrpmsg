@@ -19,13 +19,9 @@
 #include <qdeadlinetimer.h>
 
 #include <private/qiodevice_p.h>
-
-#include <memory>
-
 #include <QtCore/qlockfile.h>
 #include <QtCore/qfileinfo.h>
 #include <QtCore/qstringlist.h>
-#include <limits.h>
 #include <termios.h>
 #include <linux/rpmsg.h>
 
@@ -108,7 +104,7 @@ public:
     std::string name {""};
     int charfd {-1};
     int datafd {-1};
-    struct rpmsg_endpoint_info ept;
+    struct rpmsg_endpoint_info eptinfo;
     std::function<void(char*, int)> callback;
 };
 

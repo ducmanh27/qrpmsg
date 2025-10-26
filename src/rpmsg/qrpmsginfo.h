@@ -1,5 +1,5 @@
-#ifndef QSERIALPORTINFO_H
-#define QSERIALPORTINFO_H
+#ifndef QRPMSGINFO_H
+#define QRPMSGINFO_H
 #include <QtCore/qlist.h>
 #include <QtCore/qscopedpointer.h>
 
@@ -33,4 +33,4 @@ inline bool QRPMsgInfo::isNull() const
 
 QT_END_NAMESPACE
 
-#endif // QSERIALPORTINFO_H
+#endif // QRPMSGINFO_H
