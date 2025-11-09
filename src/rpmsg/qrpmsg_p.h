@@ -25,9 +25,10 @@
 #include <termios.h>
 #include <linux/rpmsg.h>
 
-#ifndef QRPMSG_BUFFERSIZE
-#define QRPMSG_BUFFERSIZE 32768
-#endif
+#define RPMSG_HEADER_LEN 16
+#define QRPMSG_BUFFERSIZE (512 - RPMSG_HEADER_LEN)
+#define PAYLOAD_MAX_SIZE	(QRPMSG_BUFFERSIZE - 24)
+
 QT_BEGIN_NAMESPACE
 class QWinOverlappedIoNotifier;
 class QTimer;

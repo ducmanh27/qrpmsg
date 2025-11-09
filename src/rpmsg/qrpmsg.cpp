@@ -45,6 +45,21 @@ QRPMsgErrorInfo::QRPMsgErrorInfo(QRPMsg::RPMsgError newErrorCode, const QString 
     }
 }
 
+QRPMsgPrivate::QRPMsgPrivate()
+{
+    writeBufferChunkSize = QRPMSG_BUFFERSIZE;
+    readBufferChunkSize = QRPMSG_BUFFERSIZE;
+}
+
+void QRPMsgPrivate::setError(const QRPMsgErrorInfo &errorInfo)
+{
+    Q_Q(QRPMsg);
+
+    error = errorInfo.errorCode;
+    q->setErrorString(errorInfo.errorString);
+    emit q->errorOccurred(error);
+}
+
 QRPMsg::QRPMsg(QObject *parent)
     : QIODevice(*new QRPMsgPrivate, parent),
     d_dummy(0)
@@ -86,6 +101,7 @@ QString QRPMsg::channelName() const
     return QString::fromStdString(d->name);
 }
 
+
 bool QRPMsg::open(OpenMode mode)
 {
     Q_D(QRPMsg);
@@ -102,11 +118,11 @@ bool QRPMsg::open(OpenMode mode)
         return false;
     }
 
-    clearError();
     if (!d->open(mode))
         return false;
 
     QIODevice::open(mode);
+
     return true;
 }
 

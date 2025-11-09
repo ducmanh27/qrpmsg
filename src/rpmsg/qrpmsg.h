@@ -38,7 +38,7 @@ public:
         UnsupportedOperationError,
         UnknownError,
         TimeoutError,
-        NotOpenError
+        NotOpenError,
     };
     Q_ENUM(RPMsgError)
 
@@ -77,8 +77,6 @@ protected:
 private:
     QRPMsgPrivate * const d_dummy;
     Q_DISABLE_COPY(QRPMsg)
-
-
 };
 
 QT_END_NAMESPACE

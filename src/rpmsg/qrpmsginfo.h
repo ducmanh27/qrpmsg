@@ -18,6 +18,8 @@ public:
     explicit QRPMsgInfo(const QString &name);
     QRPMsgInfo(const QRPMsgInfo &other);
     ~QRPMsgInfo();
+    QString channelName() const;
+    QString description() const;
     bool isNull() const;
 private:
     QRPMsgInfo(const QRPMsgInfoPrivate &dd);

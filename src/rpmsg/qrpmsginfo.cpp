@@ -29,6 +29,18 @@ QRPMsgInfo::~QRPMsgInfo()
 
 }
 
+QString QRPMsgInfo::channelName() const
+{
+    Q_D(const QRPMsgInfo);
+    return !d ? QString() : d->channelName;
+}
+
+QString QRPMsgInfo::description() const
+{
+    Q_D(const QRPMsgInfo);
+    return !d ? QString() : d->description;
+}
+
 QT_END_NAMESPACE
 
 

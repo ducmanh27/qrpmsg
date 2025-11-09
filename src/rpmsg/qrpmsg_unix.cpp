@@ -27,7 +27,10 @@
 #include <string>
 #include "rpmsglinuxhelper.h"
 
+#if defined QRPMSG_DEBUG
 #include <QDebug>
+#endif
+
 QString rpMsgLockFilePath(const QString &channelName)
 {
     static const QStringList lockDirectoryPaths = QStringList()
@@ -210,7 +213,9 @@ bool QRPMsgPrivate::readNotification()
 
     char *ptr = buffer.reserve(bytesToRead);
     const qint64 readBytes = readFromEndpoint(ptr, bytesToRead);
+#if defined QRPMSG_DEBUG
     qDebug() << "Read from endpoint " << readBytes << " bytes";
+#endif
     buffer.chop(bytesToRead - qMax(readBytes, qint64(0)));
 
     if (readBytes < 0) {
@@ -303,11 +308,6 @@ void QRPMsgPrivate::handleException()
     gotException = true;
 }
 
-QRPMsgPrivate::QRPMsgPrivate()
-{
-
-}
-
 bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
 {
     // TODO: lock file
@@ -325,6 +325,10 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
     //     setError(QSerialPortErrorInfo(QSerialPort::PermissionError, QSerialPort::tr("Permission error while locking the device")));
     //     return false;
     // }
+    if (name.empty()) {
+        return false;
+    }
+
     char rpmsg_dev[256];
     char rpmsg_ctrl_dev_name[NAME_MAX] = "virtio0.rpmsg_ctrl.0.0";
     char rpmsg_char_name[64];
@@ -341,17 +345,20 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
 
     eptinfo.name[sizeof(eptinfo.name) - 1] = '\0';
 
-    eptinfo.src = 0;
+    eptinfo.src = RPMSG_ADDR_ANY;
     eptinfo.dst = 0;
+#if defined QRPMSG_DEBUG
     qDebug() << "ept.name:" << eptinfo.name;
     qDebug() << "ept.src:" << eptinfo.src;
     qDebug() << "ept.dst:" << eptinfo.dst;
-
+#endif
     // Lookup channel
     snprintf(rpmsg_dev, sizeof(rpmsg_dev), "virtio0.%s.-1.0", name.c_str());
     ret = RPMsgLinuxHelper::lookup_channel(rpmsg_dev, &eptinfo);
     if (ret < 0) {
+#if defined QRPMSG_DEBUG
         qDebug("Failed to lookup rpmsg_dev %s\n",rpmsg_dev);
+#endif
         return false;
     }
 
@@ -364,12 +371,14 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
     // Bind chrdev
     ret = RPMsgLinuxHelper::bind_rpmsg_chrdev(rpmsg_dev);
     if (ret < 0) {
+#if defined QRPMSG_DEBUG
         qDebug("Failed to bind chrdev for %s\n", name.c_str());
+#endif
         return false;
     }
 
     // Get control device fd
-    /* kernel >= 6.0 has new path for rpmsg_ctrl device */
+        /* kernel >= 6.0 has new path for rpmsg_ctrl device */
     charfd = RPMsgLinuxHelper::get_rpmsg_chrdev_fd(rpmsg_ctrl_dev_name,
                                                    rpmsg_char_name);
     if (charfd < 0) {
@@ -377,7 +386,9 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
                                                        rpmsg_char_name);
         /* may be kernel is < 6.0 try previous path */
         if (charfd < 0) {
+#if defined QRPMSG_DEBUG
             qDebug("Failed to get chrdev fd for %s\n", name.c_str());
+#endif
             return false;
         }
     }
@@ -386,25 +397,32 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
     // TODO: [manhpd9] Create multiple endpoint in a channel
     ret = RPMsgLinuxHelper::app_rpmsg_create_ept(charfd, &eptinfo);
     if (ret) {
-        qDebug("Failed to create endpoint for %s\n", name.c_str());
+#if defined QRPMSG_DEBUG
+            qDebug("Failed to create endpoint for %s\n", name.c_str());
+#endif
         qt_safe_close(charfd);
         return false;
     }
 
     // Get endpoint device name
+#if defined QRPMSG_DEBUG
+    qDebug() <<"eptinfo.name: " << eptinfo.name;
+#endif
+
     if (!RPMsgLinuxHelper::get_rpmsg_ept_dev_name(rpmsg_char_name,
                                                   eptinfo.name,
                                                   ept_dev_name)) {
+
+#if defined QRPMSG_DEBUG
         qDebug("Failed to get ept dev name for %s\n", name.c_str());
+#endif
         qt_safe_close(charfd);
         return false;
     }
 
     // Open endpoint device
     snprintf(ept_dev_path, sizeof(ept_dev_path), "/dev/%s", ept_dev_name);
-
-    // TODO: need verify open mode
-    int flags = O_NOCTTY | O_NONBLOCK;
+    int flags =  O_NONBLOCK;
     switch (mode & QIODevice::ReadWrite) {
     case QIODevice::WriteOnly:
         flags |= O_WRONLY;
@@ -419,24 +437,32 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
 
     descriptor = qt_safe_open(ept_dev_path, flags); // datafd
     if (descriptor < 0) {
-        qDebug("Failed to open %s\n", ept_dev_path);
         setError(getSystemError());
+#if defined QRPMSG_DEBUG
+        qDebug("Failed to open %s", ept_dev_path);
+        qDebug() << "Error string: " <<getSystemError().errorString;
+#endif
         qt_safe_close(charfd);
         return false;
     }
-
-    qDebug("[OK] Channel '%s' initialized (descriptor=%d)\n",
+#if defined QRPMSG_DEBUG
+    qDebug("Channel '%s' initialized (descriptor = %d)\n",
            name.c_str(), descriptor);
-
+#endif
     if (!initialize(mode)) {
         qt_safe_close(descriptor);
         qt_safe_close(charfd);
         return false;
     }
-
     // TODO: lock file
     // lockFileScopedPointer = std::move(newLockFileScopedPointer);
 
+
+    /* NOTE: Driver rpmsg của Linux KHÔNG tự động gửi NS announcement sau khi probe
+    Do đó user code cần phải gửi một bản tin lần đầu để cho phía lib OpenAMP R5 Side có thể nhận được
+    và gọi callback rpmsg_virtio_ns_callback để set dst.
+    Nếu không thì khi gọi rpmsg_send() nó sẽ check dst = 0XFFFF'FFFF và trả về ngay mã lỗi -2003. */
+    qt_safe_write(descriptor, "A", 1);
     return true;
 }
 
@@ -460,9 +486,10 @@ void QRPMsgPrivate::close()
     // writeSequenceStarted = false;
     gotException = false;
 
-    if (charfd >= 0)
+    if (charfd >= 0){
+        ioctl(charfd, RPMSG_DESTROY_EPT_IOCTL, &eptinfo);
         qt_safe_close(charfd);
-
+    }
     charfd = -1;
 }
 
@@ -525,31 +552,79 @@ QRPMsgErrorInfo QRPMsgPrivate::getSystemError(int systemErrorCode) const
     return error;
 }
 
-void QRPMsgPrivate::setError(const QRPMsgErrorInfo &errorInfo)
-{
-    Q_Q(QRPMsg);
-
-    error = errorInfo.errorCode;
-    q->setErrorString(errorInfo.errorString);
-    emit q->errorOccurred(error);
-}
-
 qint64 QRPMsgPrivate::writeData(const char *data, qint64 maxSize)
 {
-    qint64 toAppend = maxSize;
+    /*
+    NOTE: trong linux source:  /drivers/rpmsg/rpmsg_char.c hàm __poll_t rpmsg_eptdev_poll(struct file *filp, poll_table *wait)
+    không hỗ trợ EPOLLOUT mà chỉ hỗ trợ EPOLLIN mặc định.
+    Nếu muốn write async thì override lại  hàm poll của struct rpmsg_endpoint_ops hỗ trợ cho EPOLLOUT
+        struct rpmsg_endpoint_ops {
+            void (*destroy_ept)(struct rpmsg_endpoint *ept);
 
-    if (writeBufferMaxSize && (writeBuffer.size() + toAppend > writeBufferMaxSize))
-        toAppend = writeBufferMaxSize - writeBuffer.size();
+            int (*send)(struct rpmsg_endpoint *ept, void *data, int len);
+            int (*sendto)(struct rpmsg_endpoint *ept, void *data, int len, u32 dst);
 
-    writeBuffer.append(data, toAppend);
-    if (!writeBuffer.isEmpty() && !isWriteNotificationEnabled())
-        setWriteNotificationEnabled(true);
-    return toAppend;
+            int (*trysend)(struct rpmsg_endpoint *ept, void *data, int len);
+            int (*trysendto)(struct rpmsg_endpoint *ept, void *data, int len, u32 dst);
+            __poll_t (*poll)(struct rpmsg_endpoint *ept, struct file *filp,
+                             poll_table *wait);
+            int (*set_flow_control)(struct rpmsg_endpoint *ept, bool pause, u32 dst);
+            ssize_t (*get_mtu)(struct rpmsg_endpoint *ept);
+        };
+    WriterNotifier không được QEventLoop gọi vì k có thông báo event ready to write do k có EPOLLOUT để monitor fd
+    */
+
+
+    // qint64 toAppend = maxSize;
+
+    // if (writeBufferMaxSize && (writeBuffer.size() + toAppend > writeBufferMaxSize))
+    //     toAppend = writeBufferMaxSize - writeBuffer.size();
+
+    // writeBuffer.append(data, toAppend);
+    // if (!writeBuffer.isEmpty() && !isWriteNotificationEnabled()){
+    //     setWriteNotificationEnabled(true);
+    // }
+
+    // return toAppend;
+
+
+
+    // Write blocking
+    const qint64 chunkSize = writeBufferChunkSize;   // tối đa 512 bytes mỗi lần ghi
+    qint64 totalWritten = 0;
+
+    while (totalWritten < maxSize)
+    {
+        qint64 toWrite = std::min(chunkSize, maxSize - totalWritten);
+
+        qint64 written = qt_safe_write(descriptor, data + totalWritten, toWrite);
+        if (written < 0) {
+            if (errno == EAGAIN || errno == EINTR) {
+                // Write bị ngắt tạm thời, retry
+                continue;
+            }
+#if defined QRPMSG_DEBUG
+            qDebug() << "Write error:" << strerror(errno);
+#endif
+            return -1;
+        }
+
+        if (written == 0) {
+            // Không ghi được nữa, blocking nhưng buffer đầy
+#if defined QRPMSG_DEBUG
+            qDebug() << "Write done";
+#endif
+            break;
+        }
+
+        totalWritten += written;
+    }
+
+    return totalWritten;  // trả về số byte đã ghi
 }
 
 bool QRPMsgPrivate::initialize(QIODevice::OpenMode mode)
 {
-
     if (mode & QIODevice::ReadOnly)
         setReadNotificationEnabled(true);
 
