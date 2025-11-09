@@ -1,7 +1,7 @@
 TARGET = QtRPMsg
 QT = core-private
 
-# QMAKE_DOCS = $$PWD/doc/qtserialport.qdocconf
+# QMAKE_DOCS = $$PWD/doc/qtrpmsg.qdocconf
 
 config_ntddmodm: DEFINES += QT_NO_REDEFINE_GUID_DEVINTERFACE_MODEM
 
