@@ -445,10 +445,11 @@ bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
 
     descriptor = qt_safe_open(ept_dev_path, flags); // datafd
     if (descriptor < 0) {
-#if defined QRPMSG_DEBUG
-        qDebug("Failed to open %s\n", ept_dev_path);
-#endif
         setError(getSystemError());
+#if defined QRPMSG_DEBUG
+        qDebug("Failed to open %s", ept_dev_path);
+        qDebug() << "Error string: " <<getSystemError().errorString;
+#endif
         qt_safe_close(charfd);
         return false;
     }

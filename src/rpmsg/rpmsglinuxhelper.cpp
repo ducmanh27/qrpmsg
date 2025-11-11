@@ -30,7 +30,7 @@ int RPMsgLinuxHelper::app_rpmsg_create_ept(int rpfd, struct rpmsg_endpoint_info 
 
 char * RPMsgLinuxHelper::get_rpmsg_ept_dev_name(const char *rpmsg_char_name, const char *ept_name, char *ept_dev_name) {
     char sys_rpmsg_ept_name_path[64];
-    char svc_name[64];
+    std::string svc_name;
     char *sys_rpmsg_path = "/sys/class/rpmsg";
     FILE *fp;
     int i;
@@ -51,15 +51,22 @@ char * RPMsgLinuxHelper::get_rpmsg_ept_dev_name(const char *rpmsg_char_name, con
 #endif
             break;
         }
-        fgets(svc_name, sizeof(svc_name), fp);
+        char buffer[64];
+        if (fgets(buffer, sizeof(buffer), fp)) {
+            svc_name = buffer;
+            // Loại bỏ ký tự newline nếu có
+            if (!svc_name.empty() && svc_name.back() == '\n') {
+                svc_name.pop_back();
+            }
+        }
         fclose(fp);
 #if defined QRPMSG_DEBUG
-        qDebug("svc_name: %s",svc_name);
+        qDebug("svc_name: %s", svc_name.c_str());
 #endif
         ept_name_len = strlen(ept_name);
-        if (ept_name_len > sizeof(svc_name))
-            ept_name_len = sizeof(svc_name);
-        if (!strncmp(svc_name, ept_name, ept_name_len)) {
+        if (ept_name_len != svc_name.size())
+            continue;
+        if (!strncmp(svc_name.c_str(), ept_name, ept_name_len)) {
             sprintf(ept_dev_name, "rpmsg%d", i);
             return ept_dev_name;
         }
@@ -191,22 +198,30 @@ int RPMsgLinuxHelper::lookup_channel(char *out, struct rpmsg_endpoint_info *pep)
     char dpath[] = RPMSG_BUS_SYS "/devices";
     struct dirent *ent;
     DIR *dir = opendir(dpath);
-
     if (dir == NULL) {
         fprintf(stderr, "opendir %s, %s\n", dpath, strerror(errno));
         return -EINVAL;
     }
+
+    size_t name_len = strlen(pep->name);
+
     // Scan tất cả devices trong /sys/bus/rpmsg/devices/
     while ((ent = readdir(dir)) != NULL) {
-        // Tìm device có tên chứa channelName, trong exapmle này đang là "rpmsg-openamp-demo-channel"
-        if (strstr(ent->d_name, pep->name)) {
-            strncpy(out, ent->d_name, NAME_MAX);
-            set_src_dst(out, pep); // Parse destination address
+        // Tìm vị trí của pep->name trong d_name
+        char *pos = strstr(ent->d_name, pep->name);
+
+        if (pos != NULL) {
+            // Kiểm tra ký tự sau pep->name phải là '.' hoặc '\0'
+            char next_char = pos[name_len];
+            if (next_char == '.' || next_char == '\0') {
+                strncpy(out, ent->d_name, NAME_MAX);
+                set_src_dst(out, pep); // Parse destination address
 #if defined QRPMSG_DEBUG
-            qDebug("using dev file: %s\n", out);
+                qDebug("using dev file: %s\n", out);
 #endif
-            closedir(dir);
-            return 0;
+                closedir(dir);
+                return 0;
+            }
         }
     }
     closedir(dir);
