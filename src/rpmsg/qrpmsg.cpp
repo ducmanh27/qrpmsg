@@ -58,6 +58,9 @@ void QRPMsgPrivate::setError(const QRPMsgErrorInfo &errorInfo)
     error = errorInfo.errorCode;
     q->setErrorString(errorInfo.errorString);
     emit q->errorOccurred(error);
+#if QT_DEPRECATED_SINCE(5, 8)
+    emit q->error(error);
+#endif
 }
 
 QRPMsg::QRPMsg(QObject *parent)
@@ -91,7 +94,6 @@ QRPMsg::~QRPMsg()
 void QRPMsg::setChannelName(const QString &name)
 {
     Q_D(QRPMsg);
-    // d->systemLocation = QRPMsgInfoPrivate::channelNameToSystemLocation(name);
     d->name = name.toStdString();
 }
 
@@ -118,11 +120,11 @@ bool QRPMsg::open(OpenMode mode)
         return false;
     }
 
+    clearError();
     if (!d->open(mode))
         return false;
 
     QIODevice::open(mode);
-
     return true;
 }
 
@@ -136,6 +138,12 @@ void QRPMsg::close()
 
     d->close();
     QIODevice::close();
+}
+
+QRPMsg::RPMsgError QRPMsg::error() const
+{
+    Q_D(const QRPMsg);
+    return d->error;
 }
 
 void QRPMsg::clearError()
@@ -153,9 +161,16 @@ qint64 QRPMsg::readBufferSize() const
 void QRPMsg::setReadBufferSize(qint64 size)
 {
     Q_D(QRPMsg);
+    if (size < 0 || size > QRPMSG_BUFFERSIZE)
+        return ;
     d->readBufferMaxSize = size;
     if (isReadable())
         d->startAsyncRead();
+}
+
+bool QRPMsg::isSequential() const
+{
+    return false;
 }
 
 qint64 QRPMsg::bytesAvailable() const
@@ -163,12 +178,22 @@ qint64 QRPMsg::bytesAvailable() const
     return QIODevice::bytesAvailable();
 }
 
+
 qint64 QRPMsg::bytesToWrite() const
 {
     qint64 pendingBytes = QIODevice::bytesToWrite();
     return pendingBytes;
 }
 
+/*!
+    \reimp
+
+    \omit
+    This function does not really read anything, as we use QIODevicePrivate's
+    buffer. The buffer will be read inside of QIODevice before this
+    method will be called.
+    \endomit
+*/
 qint64 QRPMsg::readData(char *data, qint64 maxlen)
 {
     Q_UNUSED(data);
@@ -182,6 +207,9 @@ qint64 QRPMsg::readData(char *data, qint64 maxlen)
     return qint64(0);
 }
 
+/*!
+    \reimp
+*/
 qint64 QRPMsg::writeData(const char *data, qint64 len)
 {
     Q_D(QRPMsg);

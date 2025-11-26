@@ -39,6 +39,7 @@ public:
         UnknownError,
         TimeoutError,
         NotOpenError,
+        ChannelNameEmptyError
     };
     Q_ENUM(RPMsgError)
 
@@ -59,6 +60,8 @@ public:
     qint64 readBufferSize() const;
     void setReadBufferSize(qint64 size);
 
+    bool isSequential() const override;
+
     qint64 writeBufferSize() const;
     void setWriteBufferSize(qint64 size);
 
@@ -66,6 +69,9 @@ public:
     qint64 bytesToWrite() const override;
 
 Q_SIGNALS:
+#if QT_DEPRECATED_SINCE(5, 8)
+    void error(QRPMsg::RPMsgError rpmsgError);
+#endif
     void requestToSendChanged(bool set);
     void errorOccurred(QRPMsg::RPMsgError error);
 

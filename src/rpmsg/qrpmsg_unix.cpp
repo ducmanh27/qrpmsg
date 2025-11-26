@@ -31,7 +31,7 @@
 #include <QDebug>
 #endif
 
-QString rpMsgLockFilePath(const QString &channelName)
+QString rpmsgLockFilePath(const QString &deviceName)
 {
     static const QStringList lockDirectoryPaths = QStringList()
     << QStringLiteral("/var/lock")
@@ -44,9 +44,9 @@ QString rpMsgLockFilePath(const QString &channelName)
     << QStringLiteral("/run/lock")
     << QStandardPaths::writableLocation(QStandardPaths::TempLocation);
 
-    QString fileName = channelName;
+    QString fileName = deviceName;
     fileName.replace(QLatin1Char('/'), QLatin1Char('_'));
-    fileName.prepend(QLatin1String("/LCK.."));
+    fileName.prepend(QLatin1String("/LCK_"));
 
     QString lockFilePath;
 
@@ -140,6 +140,165 @@ protected:
 private:
     QRPMsgPrivate * const dptr;
 };
+
+bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
+{
+    // TODO: set error info
+    if (name.empty()) {
+        setError(QRPMsgErrorInfo(QRPMsg::ChannelNameEmptyError,
+                                 QRPMsg::tr("Cannot set custom speed for one direction")));
+        return false;
+    }
+
+    char rpmsg_dev[256];
+    char rpmsg_ctrl_dev_name[NAME_MAX] = "virtio0.rpmsg_ctrl.0.0";
+    char rpmsg_char_name[64];
+    char ept_dev_name[64];
+    char ept_dev_path[256];
+    int ret;
+    char fpath[2*NAME_MAX];
+
+    strncpy(eptinfo.name, name.c_str(), sizeof(eptinfo.name) - 1);
+
+    eptinfo.name[sizeof(eptinfo.name) - 1] = '\0';
+    eptinfo.src = RPMSG_ADDR_ANY; // IMPORTANT
+    eptinfo.dst = 0;
+
+#if defined QRPMSG_DEBUG
+    qDebug() << "ept.name:" << eptinfo.name;
+    qDebug() << "ept.src:" << eptinfo.src;
+    qDebug() << "ept.dst:" << eptinfo.dst;
+#endif
+    // Lookup channel
+    snprintf(rpmsg_dev, sizeof(rpmsg_dev), "virtio0.%s.-1.0", name.c_str());
+    ret = RPMsgLinuxHelper::lookup_channel(rpmsg_dev, &eptinfo);
+    if (ret < 0) {
+#if defined QRPMSG_DEBUG
+        qDebug("Failed to lookup rpmsg_dev %s\n",rpmsg_dev);
+#endif
+        return false;
+    }
+
+    sprintf(fpath, RPMSG_BUS_SYS "/devices/%s", rpmsg_dev);
+    if (access(fpath, F_OK)) {
+        fprintf(stderr, "access(%s): %s\n", fpath, strerror(errno));
+        return false;
+    }
+
+    // Bind chrdev
+    ret = RPMsgLinuxHelper::bind_rpmsg_chrdev(rpmsg_dev);
+    if (ret < 0) {
+#if defined QRPMSG_DEBUG
+        qDebug("Failed to bind chrdev for %s\n", name.c_str());
+#endif
+        return false;
+    }
+
+    // Get control device fd
+    /* kernel >= 6.0 has new path for rpmsg_ctrl device */
+    charfd = RPMsgLinuxHelper::get_rpmsg_chrdev_fd(rpmsg_ctrl_dev_name,
+                                                   rpmsg_char_name);
+    if (charfd < 0) {
+        charfd = RPMsgLinuxHelper::get_rpmsg_chrdev_fd(rpmsg_dev,
+                                                       rpmsg_char_name);
+        /* may be kernel is < 6.0 try previous path */
+        if (charfd < 0) {
+#if defined QRPMSG_DEBUG
+            qDebug("Failed to get chrdev fd for %s\n", name.c_str());
+#endif
+            return false;
+        }
+    }
+
+    // Create endpoint from rpmsg char driver
+    // TODO: [manhpd9] Create multiple endpoint in a channel
+    ret = RPMsgLinuxHelper::app_rpmsg_create_ept(charfd, &eptinfo);
+    if (ret) {
+#if defined QRPMSG_DEBUG
+        qDebug("Failed to create endpoint for %s\n", name.c_str());
+#endif
+        qt_safe_close(charfd);
+        return false;
+    }
+
+// Get endpoint device name
+#if defined QRPMSG_DEBUG
+    qDebug() <<"eptinfo.name: " << eptinfo.name;
+#endif
+
+    if (!RPMsgLinuxHelper::get_rpmsg_ept_dev_name(rpmsg_char_name,
+                                                  eptinfo.name,
+                                                  ept_dev_name)) {
+
+#if defined QRPMSG_DEBUG
+        qDebug("Failed to get ept dev name for %s\n", name.c_str());
+#endif
+        qt_safe_close(charfd);
+        return false;
+    }
+
+
+    snprintf(ept_dev_path, sizeof(ept_dev_path), "/dev/%s", ept_dev_name);
+
+    QString lockFilePath = rpmsgLockFilePath(QString::fromUtf8(ept_dev_path));
+    bool isLockFileEmpty = lockFilePath.isEmpty();
+    if (isLockFileEmpty) {
+        qWarning("Failed to create a lock file for opening the device");
+        setError(QRPMsgErrorInfo(QRPMsg::PermissionError, QRPMsg::tr("Permission error while creating lock file")));
+        return false;
+    }
+
+    QScopedPointer<QLockFile> newLockFileScopedPointer(new QLockFile(lockFilePath));
+
+    if (!newLockFileScopedPointer->tryLock()) {
+        setError(QRPMsgErrorInfo(QRPMsg::PermissionError, QRPMsg::tr("Permission error while locking the device")));
+        return false;
+    }
+
+    int flags =  O_NONBLOCK;
+    switch (mode & QIODevice::ReadWrite) {
+    case QIODevice::WriteOnly:
+        flags |= O_WRONLY;
+        break;
+    case QIODevice::ReadWrite:
+        flags |= O_RDWR;
+        break;
+    default:
+        flags |= O_RDONLY;
+        break;
+    }
+
+    // Open endpoint device
+    descriptor = qt_safe_open(ept_dev_path, flags); // datafd
+    if (descriptor < 0) {
+        setError(getSystemError());
+#if defined QRPMSG_DEBUG
+        qDebug("Failed to open %s", ept_dev_path);
+        qDebug() << "Error string: " <<getSystemError().errorString;
+#endif
+        qt_safe_close(charfd);
+        return false;
+    }
+#if defined QRPMSG_DEBUG
+    qDebug("Channel '%s' initialized (descriptor = %d)\n",
+           name.c_str(), descriptor);
+#endif
+    if (!initialize(mode)) {
+        qt_safe_close(descriptor);
+        qt_safe_close(charfd);
+        return false;
+    }
+
+    /* NOTE: Driver rpmsg của Linux KHÔNG tự động gửi NS announcement sau khi probe
+    Do đó user code cần phải gửi một bản tin lần đầu để cho phía lib OpenAMP R5 Side có thể nhận được
+    và gọi callback rpmsg_virtio_ns_callback để set dst.
+    Nếu không thì khi gọi rpmsg_send() nó sẽ check dst = 0XFFFF'FFFF và trả về ngay mã lỗi -2003. */
+    qt_safe_write(descriptor, "A", 1);
+
+    lockFileScopedPointer.swap(newLockFileScopedPointer);
+    return true;
+}
+
 
 bool QRPMsgPrivate::startAsyncRead()
 {
@@ -308,164 +467,6 @@ void QRPMsgPrivate::handleException()
     gotException = true;
 }
 
-bool QRPMsgPrivate::open(QIODevice::OpenMode mode)
-{
-    // TODO: lock file
-    // QString lockFilePath = rpMsgLockFilePath(QRPMsgInfoPrivate::channelNameFromSystemLocation(systemLocation));
-    // bool isLockFileEmpty = lockFilePath.isEmpty();
-    // if (isLockFileEmpty) {
-    //     qWarning("Failed to create a lock file for opening the device");
-    //     setError(QRPMsgErrorInfo(QRPMsg::PermissionError, QRPMsg::tr("Permission error while creating lock file")));
-    //     return false;
-    // }
-
-    // auto newLockFileScopedPointer = std::make_unique<QLockFile>(lockFilePath);
-
-    // if (!newLockFileScopedPointer->tryLock()) {
-    //     setError(QSerialPortErrorInfo(QSerialPort::PermissionError, QSerialPort::tr("Permission error while locking the device")));
-    //     return false;
-    // }
-    if (name.empty()) {
-        return false;
-    }
-
-    char rpmsg_dev[256];
-    char rpmsg_ctrl_dev_name[NAME_MAX] = "virtio0.rpmsg_ctrl.0.0";
-    char rpmsg_char_name[64];
-    char ept_dev_name[64];
-    char ept_dev_path[256];
-    int ret;
-    char fpath[2*NAME_MAX];
-    if (name == "")
-    {
-        return false;
-    }
-
-    strncpy(eptinfo.name, name.c_str(), sizeof(eptinfo.name) - 1);
-
-    eptinfo.name[sizeof(eptinfo.name) - 1] = '\0';
-
-    eptinfo.src = RPMSG_ADDR_ANY;
-    eptinfo.dst = 0;
-#if defined QRPMSG_DEBUG
-    qDebug() << "ept.name:" << eptinfo.name;
-    qDebug() << "ept.src:" << eptinfo.src;
-    qDebug() << "ept.dst:" << eptinfo.dst;
-#endif
-    // Lookup channel
-    snprintf(rpmsg_dev, sizeof(rpmsg_dev), "virtio0.%s.-1.0", name.c_str());
-    ret = RPMsgLinuxHelper::lookup_channel(rpmsg_dev, &eptinfo);
-    if (ret < 0) {
-#if defined QRPMSG_DEBUG
-        qDebug("Failed to lookup rpmsg_dev %s\n",rpmsg_dev);
-#endif
-        return false;
-    }
-
-    sprintf(fpath, RPMSG_BUS_SYS "/devices/%s", rpmsg_dev);
-    if (access(fpath, F_OK)) {
-        fprintf(stderr, "access(%s): %s\n", fpath, strerror(errno));
-        return false;
-    }
-
-    // Bind chrdev
-    ret = RPMsgLinuxHelper::bind_rpmsg_chrdev(rpmsg_dev);
-    if (ret < 0) {
-#if defined QRPMSG_DEBUG
-        qDebug("Failed to bind chrdev for %s\n", name.c_str());
-#endif
-        return false;
-    }
-
-    // Get control device fd
-        /* kernel >= 6.0 has new path for rpmsg_ctrl device */
-    charfd = RPMsgLinuxHelper::get_rpmsg_chrdev_fd(rpmsg_ctrl_dev_name,
-                                                   rpmsg_char_name);
-    if (charfd < 0) {
-        charfd = RPMsgLinuxHelper::get_rpmsg_chrdev_fd(rpmsg_dev,
-                                                       rpmsg_char_name);
-        /* may be kernel is < 6.0 try previous path */
-        if (charfd < 0) {
-#if defined QRPMSG_DEBUG
-            qDebug("Failed to get chrdev fd for %s\n", name.c_str());
-#endif
-            return false;
-        }
-    }
-
-    // Create endpoint from rpmsg char driver
-    // TODO: [manhpd9] Create multiple endpoint in a channel
-    ret = RPMsgLinuxHelper::app_rpmsg_create_ept(charfd, &eptinfo);
-    if (ret) {
-#if defined QRPMSG_DEBUG
-            qDebug("Failed to create endpoint for %s\n", name.c_str());
-#endif
-        qt_safe_close(charfd);
-        return false;
-    }
-
-    // Get endpoint device name
-#if defined QRPMSG_DEBUG
-    qDebug() <<"eptinfo.name: " << eptinfo.name;
-#endif
-
-    if (!RPMsgLinuxHelper::get_rpmsg_ept_dev_name(rpmsg_char_name,
-                                                  eptinfo.name,
-                                                  ept_dev_name)) {
-
-#if defined QRPMSG_DEBUG
-        qDebug("Failed to get ept dev name for %s\n", name.c_str());
-#endif
-        qt_safe_close(charfd);
-        return false;
-    }
-
-    // Open endpoint device
-    snprintf(ept_dev_path, sizeof(ept_dev_path), "/dev/%s", ept_dev_name);
-    int flags =  O_NONBLOCK;
-    switch (mode & QIODevice::ReadWrite) {
-    case QIODevice::WriteOnly:
-        flags |= O_WRONLY;
-        break;
-    case QIODevice::ReadWrite:
-        flags |= O_RDWR;
-        break;
-    default:
-        flags |= O_RDONLY;
-        break;
-    }
-
-    descriptor = qt_safe_open(ept_dev_path, flags); // datafd
-    if (descriptor < 0) {
-        setError(getSystemError());
-#if defined QRPMSG_DEBUG
-        qDebug("Failed to open %s", ept_dev_path);
-        qDebug() << "Error string: " <<getSystemError().errorString;
-#endif
-        qt_safe_close(charfd);
-        return false;
-    }
-#if defined QRPMSG_DEBUG
-    qDebug("Channel '%s' initialized (descriptor = %d)\n",
-           name.c_str(), descriptor);
-#endif
-    if (!initialize(mode)) {
-        qt_safe_close(descriptor);
-        qt_safe_close(charfd);
-        return false;
-    }
-    // TODO: lock file
-    // lockFileScopedPointer = std::move(newLockFileScopedPointer);
-
-
-    /* NOTE: Driver rpmsg của Linux KHÔNG tự động gửi NS announcement sau khi probe
-    Do đó user code cần phải gửi một bản tin lần đầu để cho phía lib OpenAMP R5 Side có thể nhận được
-    và gọi callback rpmsg_virtio_ns_callback để set dst.
-    Nếu không thì khi gọi rpmsg_send() nó sẽ check dst = 0XFFFF'FFFF và trả về ngay mã lỗi -2003. */
-    qt_safe_write(descriptor, "A", 1);
-    return true;
-}
-
 void QRPMsgPrivate::close()
 {
     delete readNotifier;
@@ -479,7 +480,7 @@ void QRPMsgPrivate::close()
 
     qt_safe_close(descriptor);
 
-    // lockFileScopedPointer.reset(nullptr);
+    lockFileScopedPointer.reset(nullptr);
 
     descriptor = -1;
     // pendingBytesWritten = 0;
@@ -590,7 +591,7 @@ qint64 QRPMsgPrivate::writeData(const char *data, qint64 maxSize)
 
 
     // Write blocking
-    const qint64 chunkSize = writeBufferChunkSize;   // tối đa 512 bytes mỗi lần ghi
+    const qint64 chunkSize = writeBufferChunkSize;   // tối đa mặc định 512 bytes - 16 bytes(header) = 496 bytes mỗi lần ghi
     qint64 totalWritten = 0;
 
     while (totalWritten < maxSize)

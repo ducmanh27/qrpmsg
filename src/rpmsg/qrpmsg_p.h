@@ -25,16 +25,18 @@
 #include <termios.h>
 #include <linux/rpmsg.h>
 
-#define RPMSG_HEADER_LEN 16
-#define QRPMSG_BUFFERSIZE (512 - RPMSG_HEADER_LEN)
-#define PAYLOAD_MAX_SIZE	(QRPMSG_BUFFERSIZE - 24)
+#ifndef MAX_RPMSG_BUFSIZE
+#define MAX_RPMSG_BUFSIZE       512
+#endif
+#define RPMSG_HEADER_LEN        16
+#define QRPMSG_BUFFERSIZE       (MAX_RPMSG_BUFSIZE - RPMSG_HEADER_LEN)
+
 
 QT_BEGIN_NAMESPACE
-class QWinOverlappedIoNotifier;
 class QTimer;
 class QSocketNotifier;
 
-QString rpMsgLockFilePath(const QString &channelName);
+QString rpmsgLockFilePath(const QString &deviceName);
 
 class QRPMsgErrorInfo
 {
@@ -106,7 +108,8 @@ public:
     int charfd {-1};
     int datafd {-1};
     struct rpmsg_endpoint_info eptinfo;
-    std::function<void(char*, int)> callback;
+
+    QScopedPointer<QLockFile> lockFileScopedPointer;
 };
 
 QT_END_NAMESPACE
