@@ -1,4 +1,4 @@
 [gerrit]
 host=codereview.qt-project.org
-project=qt/qtserialport
+project=qt/qtrpmsg
 defaultbranch=dev
