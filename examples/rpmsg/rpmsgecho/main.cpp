@@ -5,7 +5,7 @@
 #include "rpmsgreader.h"
 #include <QDebug>
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     QCoreApplication coreApplication(argc, argv);
     const int argumentCount = QCoreApplication::arguments().size();
@@ -13,9 +13,10 @@ int main(int argc, char *argv[])
 
     QTextStream standardOutput(stdout);
     QString channelName {""};
-    if (argumentCount == 1) {
+    if (argumentCount == 1)
+    {
         standardOutput << QObject::tr("Usage: %1 <rpmsgchannelname>")
-                          .arg(argumentList.first())
+                       .arg(argumentList.first())
                        << "\n";
         // FIXME: tách channel name riêng, virtIO và src/des riêng
         channelName = "rpmsg-openamp-demo-channel"; // virtualIO - channelName - src.des
@@ -34,10 +35,11 @@ int main(int argc, char *argv[])
     // rpMsg.setDst(0);
     // rpMsg.setSrc(1024);
 
-    if (!rpMsg.open(QIODevice::ReadOnly)) {
+    if (!rpMsg.open(QIODevice::ReadWrite))
+    {
         standardOutput << QObject::tr("Failed to open channel %1, error: %2")
-                          .arg(channelName)
-                          .arg(rpMsg.errorString())
+                       .arg(channelName)
+                       .arg(rpMsg.errorString())
                        << "\n";
         return 1;
     }

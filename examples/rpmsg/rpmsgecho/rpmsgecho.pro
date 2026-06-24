@@ -4,15 +4,15 @@ QT += rpmsg
 CONFIG += console
 CONFIG -= app_bundle
 
-TARGET = cwriterasync
+TARGET = rpmsgecho
 TEMPLATE = app
 
 HEADERS += \
-    rpmsgwriter.h
+    rpmsgreader.h
 
 SOURCES += \
     main.cpp \
-    rpmsgwriter.cpp
+    rpmsgreader.cpp
 
-target.path = $$[QT_INSTALL_EXAMPLES]/rpmsg/cwriterasync
+target.path = $$[QT_INSTALL_EXAMPLES]/rpmsg/rpmsgecho
 INSTALLS += target

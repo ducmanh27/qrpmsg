@@ -1,2 +1,2 @@
 TEMPLATE = subdirs
-SUBDIRS = creaderasync cwriterasync
+SUBDIRS = rpmsgecho 

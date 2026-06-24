@@ -15,18 +15,18 @@ class RPMsgReader : public QObject
 {
     Q_OBJECT
 public:
-    explicit RPMsgReader(QRPMsg *rpMsg,QObject *parent = nullptr);
+    explicit RPMsgReader(QRPMsg* rpMsg, QObject* parent = nullptr);
 
 private slots:
     void handleReadyRead();
-    void handleTimeout();
+    void handleEchoMessage();
     void handleError(QRPMsg::RPMsgError rpMsgError);
 
 private:
-    QRPMsg *m_rpMsg = nullptr;
-    QByteArray m_readData;
-    QTextStream m_standardOutput;
-    QTimer m_timer;
+    QRPMsg* mRpMsg = nullptr;
+    QTextStream mStandardOutput;
+    QTimer mTimerEchoMessage;
+    int mCounter {0};
 };
 
 #endif // RPMSGREADER_H
