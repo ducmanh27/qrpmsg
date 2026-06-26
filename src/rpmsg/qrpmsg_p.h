@@ -36,13 +36,13 @@ QT_BEGIN_NAMESPACE
 class QTimer;
 class QSocketNotifier;
 
-QString rpmsgLockFilePath(const QString &deviceName);
+QString rpmsgLockFilePath(const QString& deviceName);
 
 class QRPMsgErrorInfo
 {
 public:
     QRPMsgErrorInfo(QRPMsg::RPMsgError newErrorCode = QRPMsg::UnknownError,
-                         const QString &newErrorString = QString());
+                    const QString& newErrorString = QString());
     QRPMsg::RPMsgError errorCode = QRPMsg::UnknownError;
     QString errorString;
 };
@@ -58,9 +58,9 @@ public:
 
     QRPMsgErrorInfo getSystemError(int systemErrorCode = -1) const;
 
-    void setError(const QRPMsgErrorInfo &errorInfo);
+    void setError(const QRPMsgErrorInfo& errorInfo);
 
-    qint64 writeData(const char *data, qint64 maxSize);
+    qint64 writeData(const char* data, qint64 maxSize);
 
     bool initialize(QIODevice::OpenMode mode);
 
@@ -70,28 +70,21 @@ public:
 
     bool isReadNotificationEnabled() const;
     void setReadNotificationEnabled(bool enable);
-    bool isWriteNotificationEnabled() const;
-    void setWriteNotificationEnabled(bool enable);
-
 
     QString systemLocation;
     qint64 readBufferMaxSize = 0;
     QRPMsg::RPMsgError error = QRPMsg::NoError;
-    qint64 writeBufferMaxSize = 0;
 
-    qint64 readFromEndpoint(char *data, qint64 maxSize);
-    qint64 writeToEndpoint(const char *data, qint64 maxSize);
+    qint64 readFromEndpoint(char* data, qint64 maxSize);
+    qint64 writeToEndpoint(const char* data, qint64 maxSize);
 
     bool readNotification();
-    bool startAsyncWrite();
-    bool completeAsyncWrite();
     void handleException();
 
     int descriptor = -1;
 
-    QSocketNotifier *readNotifier = nullptr;
-    QSocketNotifier *writeNotifier = nullptr;
-    QSocketNotifier *exceptionNotifier = nullptr;
+    QSocketNotifier* readNotifier = nullptr;
+    QSocketNotifier* exceptionNotifier = nullptr;
 
     bool readPortNotifierCalled = false;
     bool readPortNotifierState = false;
@@ -105,11 +98,13 @@ public:
     bool gotException = false;
 
     std::string name {""};
-    int charfd {-1};
-    int datafd {-1};
+    int charfd { -1};
+    int datafd { -1};
     struct rpmsg_endpoint_info eptinfo;
 
     QScopedPointer<QLockFile> lockFileScopedPointer;
+
+    bool nsAckPending = false;
 };
 
 QT_END_NAMESPACE

@@ -15,7 +15,7 @@ RPMsgReader::RPMsgReader(QRPMsg* rpMsg, QObject* parent)
 
 void RPMsgReader::handleReadyRead()
 {
-    qDebug() << "Data receive: " << mRpMsg->readAll();
+    qDebug("Data receive from channel %s : %s", qPrintable(mRpMsg->channelName()), mRpMsg->readAll().constData());
 }
 
 void RPMsgReader::handleEchoMessage()
@@ -29,9 +29,9 @@ void RPMsgReader::handleError(QRPMsg::RPMsgError rpMsgError)
     if (rpMsgError == QRPMsg::ReadError)
     {
         mStandardOutput << QObject::tr("An I/O error occurred while reading "
-                                        "the data from channel %1, error: %2")
-                         .arg(mRpMsg->channelName(), mRpMsg->errorString())
-                         << "\n";
+                                       "the data from channel %1, error: %2")
+                        .arg(mRpMsg->channelName(), mRpMsg->errorString())
+                        << "\n";
         QCoreApplication::exit(1);
     }
 }

@@ -5,7 +5,9 @@ unix:qtConfig(libudev) {
     INCLUDEPATH += $$QMAKE_INCDIR_LIBUDEV
     LIBS_PRIVATE += $$QMAKE_LIBS_LIBUDEV
 }
-
+CONFIG(debug, debug | release) {
+    DEFINES += QRPMSG_DEBUG
+}
 PUBLIC_HEADERS += \
     $$PWD/qrpmsgglobal.h \
     $$PWD/qrpmsg.h \

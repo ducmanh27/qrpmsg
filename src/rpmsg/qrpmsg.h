@@ -19,7 +19,8 @@ class Q_RPMSG_EXPORT QRPMsg : public QIODevice
 
 public:
 
-    enum Direction  {
+    enum Direction
+    {
         Input = 1,
         Output = 2,
         AllDirections = Input | Output
@@ -27,7 +28,8 @@ public:
     Q_FLAG(Direction)
     Q_DECLARE_FLAGS(Directions, Direction)
 
-    enum RPMsgError {
+    enum RPMsgError
+    {
         NoError,
         DeviceNotFoundError,
         PermissionError,
@@ -39,16 +41,17 @@ public:
         UnknownError,
         TimeoutError,
         NotOpenError,
-        ChannelNameEmptyError
+        ChannelNameEmptyError,
+        ChannelNameNotExistsError
     };
     Q_ENUM(RPMsgError)
 
-    explicit QRPMsg(QObject *parent = nullptr);
-    explicit QRPMsg(const QString &name, QObject *parent = nullptr);
-    explicit QRPMsg(const QRPMsgInfo &info, QObject *parent = nullptr);
+    explicit QRPMsg(QObject* parent = nullptr);
+    explicit QRPMsg(const QString& name, QObject* parent = nullptr);
+    explicit QRPMsg(const QRPMsgInfo& info, QObject* parent = nullptr);
     virtual ~QRPMsg();
 
-    void setChannelName(const QString &name);
+    void setChannelName(const QString& name);
     QString channelName() const;
 
     bool open(OpenMode mode) override;
@@ -77,11 +80,11 @@ Q_SIGNALS:
 
     // QIODevice interface
 protected:
-    qint64 readData(char *data, qint64 maxlen) override;
-    qint64 writeData(const char *data, qint64 len) override;
+    qint64 readData(char* data, qint64 maxlen) override;
+    qint64 writeData(const char* data, qint64 len) override;
 
 private:
-    QRPMsgPrivate * const d_dummy;
+    QRPMsgPrivate* const d_dummy;
     Q_DISABLE_COPY(QRPMsg)
 };
 

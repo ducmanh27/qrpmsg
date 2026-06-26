@@ -10,12 +10,14 @@
 #include <QtCore/qdebug.h>
 QT_BEGIN_NAMESPACE
 
-QRPMsgErrorInfo::QRPMsgErrorInfo(QRPMsg::RPMsgError newErrorCode, const QString &newErrorString)
-:     errorCode(newErrorCode)
+QRPMsgErrorInfo::QRPMsgErrorInfo(QRPMsg::RPMsgError newErrorCode, const QString& newErrorString)
+    :     errorCode(newErrorCode)
     , errorString(newErrorString)
 {
-    if (errorString.isNull()) {
-        switch (errorCode) {
+    if (errorString.isNull())
+    {
+        switch (errorCode)
+        {
         case QRPMsg::NoError:
             errorString = QRPMsg::tr("No error");
             break;
@@ -51,7 +53,7 @@ QRPMsgPrivate::QRPMsgPrivate()
     readBufferChunkSize = QRPMSG_BUFFERSIZE;
 }
 
-void QRPMsgPrivate::setError(const QRPMsgErrorInfo &errorInfo)
+void QRPMsgPrivate::setError(const QRPMsgErrorInfo& errorInfo)
 {
     Q_Q(QRPMsg);
 
@@ -63,23 +65,23 @@ void QRPMsgPrivate::setError(const QRPMsgErrorInfo &errorInfo)
 #endif
 }
 
-QRPMsg::QRPMsg(QObject *parent)
+QRPMsg::QRPMsg(QObject* parent)
     : QIODevice(*new QRPMsgPrivate, parent),
-    d_dummy(0)
+      d_dummy(0)
 {
 
 }
 
-QRPMsg::QRPMsg(const QString &name, QObject *parent)
+QRPMsg::QRPMsg(const QString& name, QObject* parent)
     : QIODevice(*new QRPMsgPrivate, parent),
-    d_dummy(0)
+      d_dummy(0)
 {
     setChannelName(name);
 }
 
-QRPMsg::QRPMsg(const QRPMsgInfo &info, QObject *parent)
+QRPMsg::QRPMsg(const QRPMsgInfo& info, QObject* parent)
     : QIODevice(*new QRPMsgPrivate, parent),
-    d_dummy(0)
+      d_dummy(0)
 {
     Q_UNUSED(info)
     // TODO: set channel info
@@ -88,10 +90,12 @@ QRPMsg::QRPMsg(const QRPMsgInfo &info, QObject *parent)
 QRPMsg::~QRPMsg()
 {
     if (isOpen())
+    {
         close();
+    }
 }
 
-void QRPMsg::setChannelName(const QString &name)
+void QRPMsg::setChannelName(const QString& name)
 {
     Q_D(QRPMsg);
     d->name = name.toStdString();
@@ -108,21 +112,25 @@ bool QRPMsg::open(OpenMode mode)
 {
     Q_D(QRPMsg);
 
-    if (isOpen()) {
+    if (isOpen())
+    {
         d->setError(QRPMsgErrorInfo(QRPMsg::OpenError));
         return false;
     }
 
     // Define while not supported modes.
     static const OpenMode unsupportedModes = Append | Truncate | Text | Unbuffered;
-    if ((mode & unsupportedModes) || mode == NotOpen) {
+    if ((mode & unsupportedModes) || mode == NotOpen)
+    {
         d->setError(QRPMsgErrorInfo(QRPMsg::UnsupportedOperationError, tr("Unsupported open mode")));
         return false;
     }
 
     clearError();
     if (!d->open(mode))
+    {
         return false;
+    }
 
     QIODevice::open(mode);
     return true;
@@ -131,7 +139,8 @@ bool QRPMsg::open(OpenMode mode)
 void QRPMsg::close()
 {
     Q_D(QRPMsg);
-    if (!isOpen()) {
+    if (!isOpen())
+    {
         d->setError(QRPMsgErrorInfo(QRPMsg::NotOpenError));
         return;
     }
@@ -162,15 +171,19 @@ void QRPMsg::setReadBufferSize(qint64 size)
 {
     Q_D(QRPMsg);
     if (size < 0 || size > QRPMSG_BUFFERSIZE)
+    {
         return ;
+    }
     d->readBufferMaxSize = size;
     if (isReadable())
+    {
         d->startAsyncRead();
+    }
 }
 
 bool QRPMsg::isSequential() const
 {
-    return false;
+    return true;
 }
 
 qint64 QRPMsg::bytesAvailable() const
@@ -194,7 +207,7 @@ qint64 QRPMsg::bytesToWrite() const
     method will be called.
     \endomit
 */
-qint64 QRPMsg::readData(char *data, qint64 maxlen)
+qint64 QRPMsg::readData(char* data, qint64 maxlen)
 {
     Q_UNUSED(data);
     Q_UNUSED(maxlen);
@@ -210,7 +223,7 @@ qint64 QRPMsg::readData(char *data, qint64 maxlen)
 /*!
     \reimp
 */
-qint64 QRPMsg::writeData(const char *data, qint64 len)
+qint64 QRPMsg::writeData(const char* data, qint64 len)
 {
     Q_D(QRPMsg);
     return d->writeData(data, len);
